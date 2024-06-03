@@ -102,6 +102,7 @@ class probe_sequence_impl_base {
    */
   __host__ __device__ static constexpr bool uses_vector_load() noexcept
   {
+    // return false;
     return cuco::detail::is_packable<value_type>();
   }
 
@@ -423,6 +424,7 @@ class double_hashing_impl
   __device__ __forceinline__ const_iterator next_slot(const_iterator s) const noexcept
   {
     std::size_t index = s - slots_;
+    // printf("index: %ld, step_size: %ld, capacity: %ld\n", index, step_size_, capacity_);
     return &slots_[(index + step_size_) % capacity_];
   }
 

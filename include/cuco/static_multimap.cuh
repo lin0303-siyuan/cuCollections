@@ -592,6 +592,7 @@ class static_multimap {
    */
   static constexpr bool uses_vector_load() noexcept {
     return cuco::detail::is_packable<value_type>();
+    // return false;
   }
 
   /**
@@ -660,6 +661,16 @@ class static_multimap {
                 empty_value_sentinel.value} {}
 
    public:
+    /**
+     * @brief Load the pair array from the current slot.
+     *
+     * @return Slots array
+     */
+    __device__ __forceinline__ void get_pair_array(
+        value_type* arr, const_iterator current_slot) const noexcept {
+      impl_.get_pair_array(arr, current_slot);
+    }
+
     /**
      * @brief Gets slots array.
      *

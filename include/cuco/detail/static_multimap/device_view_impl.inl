@@ -153,6 +153,18 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
 
  public:
   /**
+   * @brief Load two key/value pairs from the given slot to the target pair array.
+   *
+   * @param arr The pair array to be loaded
+   * @param current_slot The given slot to load from
+   */
+  __device__ __forceinline__ void get_pair_array(value_type* arr,
+                                                 const_iterator current_slot) const noexcept
+  {
+    load_pair_array(arr, current_slot);
+  }
+
+  /**
    * @brief Gets the sentinel value used to represent an empty key slot.
    *
    * @return The sentinel value used to represent an empty key slot
@@ -788,6 +800,14 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
     }
   }
 
+  template <bool uses_vector_load, bool is_outer, typename CG, typename KeyEqual>
+  __device__ __forceinline__ std::enable_if_t<uses_vector_load, const_iterator> find(
+    CG const& g, Key const& k, KeyEqual key_equal) noexcept
+  {
+    auto current_slot = initial_slot(g, k);
+    return current_slot;
+  }
+
   /**
    * @brief Find the first iterator that matches the given key using scalar loads.
    *
@@ -828,6 +848,13 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
 
   template <bool uses_vector_load, bool is_outer, typename CG, typename KeyEqual>
   __device__ __forceinline__ std::enable_if_t<not uses_vector_load, const_iterator> next_iterator(
+    CG const& g, Key const& k, const_iterator current_iterator, KeyEqual key_equal) noexcept
+  {
+    return next_slot(current_iterator);
+  }
+
+  template <bool uses_vector_load, bool is_outer, typename CG, typename KeyEqual>
+  __device__ __forceinline__ std::enable_if_t<uses_vector_load, const_iterator> next_iterator(
     CG const& g, Key const& k, const_iterator current_iterator, KeyEqual key_equal) noexcept
   {
     return next_slot(current_iterator);

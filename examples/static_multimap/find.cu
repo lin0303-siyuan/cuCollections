@@ -44,16 +44,22 @@ __global__ void find(MapViewT multi_map, InputIt first, int n,
     auto it = multi_map.find(tile, key);
     using value_type = typename MapViewT::value_type;
     while (true) {
-      value_type slot_contents = *reinterpret_cast<value_type const *>(it);
-      auto const &current_key = slot_contents.first;
+      value_type arr[2];
+      multi_map.get_pair_array(&arr[0], it);
+      auto const first_slot_is_empty = cuco::detail::bitwise_compare(
+          arr[0].first, multi_map.get_empty_key_sentinel());
+      auto const second_slot_is_empty = cuco::detail::bitwise_compare(
+          arr[1].first, multi_map.get_empty_key_sentinel());
 
-      auto const slot_is_empty = cuco::detail::bitwise_compare(
-          current_key, multi_map.get_empty_key_sentinel());
-      auto const equals =
-          not slot_is_empty and cuco::detail::bitwise_compare(current_key, key);
-
-      atomicAdd(num_matches, equals);
-      if (tile.any(slot_is_empty)) {
+      auto const first_equals =
+          (not first_slot_is_empty and
+           cuco::detail::bitwise_compare(arr[0].first, key));
+      auto const second_equals =
+          (not second_slot_is_empty and
+           cuco::detail::bitwise_compare(arr[1].first, key));
+      atomicAdd(num_matches, first_equals);
+      atomicAdd(num_matches, second_equals);
+      if (tile.any(first_slot_is_empty) or second_slot_is_empty) {
         break;
       }
 

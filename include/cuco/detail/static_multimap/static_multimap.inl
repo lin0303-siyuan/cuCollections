@@ -608,8 +608,8 @@ __device__ __forceinline__
     KeyEqual key_equal) noexcept
 {
   constexpr bool is_outer         = false;
-  constexpr bool uses_vector_load = false;
-  return impl_.find<uses_vector_load, is_outer>(g, k, key_equal);
+  constexpr bool vector_load = uses_vector_load();
+  return impl_.find<vector_load, is_outer>(g, k, key_equal);
 }
 
 template <typename Key,
@@ -628,8 +628,8 @@ __device__ __forceinline__
     KeyEqual key_equal) noexcept
 {
   constexpr bool is_outer         = false;
-  constexpr bool uses_vector_load = false;
-  return impl_.next_iterator<uses_vector_load, is_outer>(g, k, current_iterator, key_equal);
+  constexpr bool vector_load = uses_vector_load();
+  return impl_.next_iterator<vector_load, is_outer>(g, k, current_iterator, key_equal);
 }
 
 template <typename Key,
