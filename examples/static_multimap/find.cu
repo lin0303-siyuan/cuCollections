@@ -33,7 +33,7 @@ namespace cg = cooperative_groups;
 // that returns iterator and next_iterator
 template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
 __global__ void find(MapViewT multi_map, InputIt first, int n,
-                     int *num_matches) {
+                     int* num_matches) {
   // Similar stuff as cuco device-side count does
   auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
   int64_t const loop_stride = gridDim.x * blockDim.x / tile_size;
@@ -73,7 +73,7 @@ __global__ void find(MapViewT multi_map, InputIt first, int n,
 // Count by just calling device count api and then increment atomic sum
 template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
 __global__ void count(MapViewT multi_map, InputIt first, int n,
-                      int *num_matches) {
+                      int* num_matches) {
   auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
   int64_t const loop_stride = gridDim.x * blockDim.x / tile_size;
   int64_t idx = (blockDim.x * blockIdx.x + threadIdx.x) / tile_size;
@@ -89,7 +89,7 @@ __global__ void count(MapViewT multi_map, InputIt first, int n,
 // Official implementation for the count kernel
 template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
 __global__ void count_official(MapViewT multi_map, InputIt first, int n,
-                               int *num_matches) {
+                               int* num_matches) {
   constexpr int block_size = 64;
   auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
   int64_t const loop_stride = gridDim.x * block_size / tile_size;
@@ -172,7 +172,7 @@ int main(void) {
   thrust::device_vector<key_type> keys_to_find(N);
   thrust::sequence(keys_to_find.begin(), keys_to_find.end(), 0);
 
-  int *num_matches;
+  int* num_matches;
   cudaMalloc(&num_matches, sizeof(int));
   cudaMemset(num_matches, 0, sizeof(int));
   auto device_view = map.get_device_view();
@@ -184,8 +184,8 @@ int main(void) {
   // Issue is that find kernel is not working correctly by returning way fewer
   // matches
   cudaDeviceSynchronize();
-  int *num_matches_host;
-  num_matches_host = (int *)malloc(sizeof(int));
+  int* num_matches_host;
+  num_matches_host = (int*)malloc(sizeof(int));
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
   printf("find: num_matches: %d\n", *num_matches_host);
