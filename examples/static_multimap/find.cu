@@ -32,8 +32,8 @@ namespace cg = cooperative_groups;
 // This is actually a count kernel by utilizing self-defined cuco multimap api
 // that returns iterator and next_iterator
 template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
-__global__ void find(MapViewT multi_map, InputIt first, int n,
-                     int* num_matches) {
+__global__ void find_vector_load(MapViewT multi_map, InputIt first, int n,
+                                 int* num_matches) {
   // Similar stuff as cuco device-side count does
   auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
   int64_t const loop_stride = gridDim.x * blockDim.x / tile_size;
@@ -44,19 +44,18 @@ __global__ void find(MapViewT multi_map, InputIt first, int n,
     auto it = multi_map.find(tile, key);
     using value_type = typename MapViewT::value_type;
     while (true) {
-      value_type arr[2];
-      multi_map.get_pair_array(&arr[0], it);
+      // value_type arr[2];
+      // multi_map.get_pair_array(&arr[0], it);
+      const value_type* arr = multi_map.get_pair_array(it);
       auto const first_slot_is_empty = cuco::detail::bitwise_compare(
           arr[0].first, multi_map.get_empty_key_sentinel());
       auto const second_slot_is_empty = cuco::detail::bitwise_compare(
           arr[1].first, multi_map.get_empty_key_sentinel());
 
       auto const first_equals =
-          (not first_slot_is_empty and
-           cuco::detail::bitwise_compare(arr[0].first, key));
+          cuco::detail::bitwise_compare(arr[0].first, key);
       auto const second_equals =
-          (not second_slot_is_empty and
-           cuco::detail::bitwise_compare(arr[1].first, key));
+          cuco::detail::bitwise_compare(arr[1].first, key);
       atomicAdd(num_matches, first_equals);
       atomicAdd(num_matches, second_equals);
       if (tile.any(first_slot_is_empty) or second_slot_is_empty) {
@@ -66,6 +65,64 @@ __global__ void find(MapViewT multi_map, InputIt first, int n,
       it = multi_map.next_iterator(tile, key, it);
     }
 
+    idx += loop_stride;
+  }
+}
+
+// This is actually a count kernel by utilizing self-defined cuco multimap api
+// that returns iterator and next_iterator
+template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
+__global__ void find_scalar_load(MapViewT multi_map, InputIt first, int n,
+                                 int* num_matches) {
+  // Similar stuff as cuco device-side count does
+  auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
+  int64_t const loop_stride = gridDim.x * blockDim.x / tile_size;
+  int64_t idx = (blockDim.x * blockIdx.x + threadIdx.x) / tile_size;
+  while (idx < n) {
+    // printf("before: idx is %ld\n", idx);
+    auto const key = static_cast<int>(first[idx]);
+    auto it = multi_map.find(tile, key);
+    using value_type = typename MapViewT::value_type;
+    while (true) {
+      value_type slot_contents = *reinterpret_cast<value_type const*>(it);
+      auto const slot_is_empty = cuco::detail::bitwise_compare(
+          slot_contents.first, multi_map.get_empty_key_sentinel());
+      auto const equals =
+          cuco::detail::bitwise_compare(slot_contents.first, key);
+      atomicAdd(num_matches, equals);
+      if (tile.any(slot_is_empty)) {
+        break;
+      }
+
+      it = multi_map.next_iterator(tile, key, it);
+    }
+
+    idx += loop_stride;
+  }
+}
+
+template <typename MapViewT, typename InputIt, uint32_t tile_size = TILE_SIZE>
+__global__ void iterate_all(MapViewT multi_map, InputIt first, int n,
+                            int* num_matches) {
+  // auto tile = cg::tiled_partition<tile_size>(cg::this_thread_block());
+  int64_t const loop_stride = gridDim.x * blockDim.x;
+  int64_t idx = (blockDim.x * blockIdx.x + threadIdx.x);
+  // int64_t idx = (blockDim.x * blockIdx.x + threadIdx.x) / tile_size;
+  using value_type = typename MapViewT::value_type;
+  size_t capacity = multi_map.get_capacity();
+  auto slots = multi_map.get_slots();
+  while (idx < capacity) {
+    auto it = &slots[idx];
+    value_type slot_contents = *reinterpret_cast<value_type const*>(it);
+    if (not cuco::detail::bitwise_compare(slot_contents.first,
+                                          multi_map.get_empty_key_sentinel())) {
+      atomicAdd(num_matches, 1);
+      // printf("slot: %d, %d\n", slot_contents.first, slot_contents.second);
+      if (cuco::detail::bitwise_compare(slot_contents.second,
+                                        multi_map.get_empty_value_sentinel())) {
+        atomicAdd(num_matches, 1);
+      }
+    }
     idx += loop_stride;
   }
 }
@@ -176,8 +233,8 @@ int main(void) {
   cudaMalloc(&num_matches, sizeof(int));
   cudaMemset(num_matches, 0, sizeof(int));
   auto device_view = map.get_device_view();
-  find<<<grid_size, block_size>>>(device_view, keys_to_find.begin(), N,
-                                  num_matches);
+  find_vector_load<<<grid_size, block_size>>>(device_view, keys_to_find.begin(),
+                                              N, num_matches);
   // find<<<32, 32>>>(device_view, pairs.data().get(), N, num_matches);
 
   // All of the following printing should be 50,000
@@ -189,6 +246,12 @@ int main(void) {
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
   printf("find: num_matches: %d\n", *num_matches_host);
+  cudaMemset(num_matches, 0, sizeof(int));
+
+  iterate_all<<<32, 64>>>(device_view, keys_to_find.begin(), N, num_matches);
+  cudaMemcpy(num_matches_host, num_matches, sizeof(int),
+             cudaMemcpyDeviceToHost);
+  printf("iterate_all: num_matches: %d\n", *num_matches_host);
   cudaMemset(num_matches, 0, sizeof(int));
 
   // Reference count kernel and result
