@@ -672,16 +672,6 @@ class static_multimap {
     }
 
     /**
-     * @brief Load the pair array from the current slot.
-     *
-     * @return Slots array
-     */
-    __device__ __forceinline__ const value_type* get_pair_array(
-        const_iterator current_slot) const noexcept {
-      impl_.get_pair_array(current_slot);
-    }
-
-    /**
      * @brief Gets slots array.
      *
      * @return Slots array

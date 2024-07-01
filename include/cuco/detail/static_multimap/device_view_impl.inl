@@ -164,18 +164,6 @@ class static_multimap<Key, Value, Scope, Allocator, ProbeSequence>::device_view_
     load_pair_array(arr, current_slot);
   }
 
-  __device__ __forceinline__ const value_type* get_pair_array(
-    const_iterator current_slot) const noexcept
-  {
-    // load_pair_array(arr, current_slot);
-    // if constexpr (sizeof(value_type) == 4) {
-    //   return reinterpret_cast<const value_type*>(current_slot);
-    // } else {
-    //   return reinterpret_cast<const value_type*>(reinterpret_cast<uint4*>(current_slot));
-    // }
-    return reinterpret_cast<const value_type*>(current_slot);
-  }
-
   /**
    * @brief Gets the sentinel value used to represent an empty key slot.
    *

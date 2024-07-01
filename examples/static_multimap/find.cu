@@ -28,6 +28,8 @@
 #define TILE_SIZE 8
 
 namespace cg = cooperative_groups;
+using key_type = int;
+using value_type = int;
 
 // This is actually a count kernel by utilizing self-defined cuco multimap api
 // that returns iterator and next_iterator
@@ -43,22 +45,52 @@ __global__ void find_vector_load(MapViewT multi_map, InputIt first, int n,
     auto const key = static_cast<int>(first[idx]);
     auto it = multi_map.find(tile, key);
     using value_type = typename MapViewT::value_type;
+    using iterator = typename MapViewT::iterator;
     while (true) {
-      // value_type arr[2];
-      // multi_map.get_pair_array(&arr[0], it);
-      const value_type* arr = multi_map.get_pair_array(it);
-      auto const first_slot_is_empty = cuco::detail::bitwise_compare(
-          arr[0].first, multi_map.get_empty_key_sentinel());
-      auto const second_slot_is_empty = cuco::detail::bitwise_compare(
-          arr[1].first, multi_map.get_empty_key_sentinel());
+      value_type arr[2];
+      bool slot_is_empty[2];
+      multi_map.get_pair_array(&arr[0], it);
 
-      auto const first_equals =
-          cuco::detail::bitwise_compare(arr[0].first, key);
-      auto const second_equals =
-          cuco::detail::bitwise_compare(arr[1].first, key);
-      atomicAdd(num_matches, first_equals);
-      atomicAdd(num_matches, second_equals);
-      if (tile.any(first_slot_is_empty) or second_slot_is_empty) {
+#pragma unroll
+      for (int i = 0; i < 2; i++) {
+        slot_is_empty[i] = cuco::detail::bitwise_compare(
+            arr[i].first, multi_map.get_empty_key_sentinel());
+        auto const equals = cuco::detail::bitwise_compare(arr[i].first, key);
+        atomicAdd(num_matches, equals);
+        if (equals) {
+          iterator no_const_it = const_cast<iterator>(it + i);
+          no_const_it->second.store(multi_map.get_empty_value_sentinel());
+        }
+      }
+
+      // auto no_const_it = const_cast<iterator>(it);
+      // auto second_no_const_it = const_cast<iterator>(it + 1);
+
+      // auto const first_slot_is_empty = cuco::detail::bitwise_compare(
+      //     no_const_it->first, multi_map.get_empty_key_sentinel());
+      // auto const second_slot_is_empty = cuco::detail::bitwise_compare(
+      //     second_no_const_it->first, multi_map.get_empty_key_sentinel());
+
+      // auto const first_slot_is_empty = cuco::detail::bitwise_compare(
+      //     arr[0].first, multi_map.get_empty_key_sentinel());
+      // auto const second_slot_is_empty = cuco::detail::bitwise_compare(
+      //     arr[1].first, multi_map.get_empty_key_sentinel());
+
+      // auto const first_equals =
+      //     cuco::detail::bitwise_compare(arr[0].first, key);
+      // auto const second_equals =
+      //     cuco::detail::bitwise_compare(arr[1].first, key);
+      // atomicAdd(num_matches, first_equals);
+      // atomicAdd(num_matches, second_equals);
+
+      // if (first_equals) {
+      //   no_const_it->second.store(-1);
+      // }
+      // if (second_equals) {
+      //   second_no_const_it->second.store(-1);
+      // }
+
+      if (tile.any(slot_is_empty[0] || slot_is_empty[1])) {
         break;
       }
 
@@ -176,9 +208,6 @@ struct MyHash {
 };
 
 int main(void) {
-  using key_type = int;
-  using value_type = int;
-
   key_type empty_key_sentinel = -1;
   value_type empty_value_sentinel = -1;
 
@@ -207,9 +236,6 @@ int main(void) {
                             TILE_SIZE, cuco::default_hash_function<key_type>>>
       map{N * 2, cuco::empty_key{empty_key_sentinel},
           cuco::empty_value{empty_value_sentinel}};
-  // cuco::static_multimap<key_type, value_type> map{
-  //     N * 2, cuco::empty_key{empty_key_sentinel},
-  //     cuco::empty_value{empty_value_sentinel}};
 
   thrust::device_vector<thrust::pair<key_type, value_type>> pairs(N);
 
@@ -245,12 +271,14 @@ int main(void) {
   num_matches_host = (int*)malloc(sizeof(int));
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
+  // Should be 50000
   printf("find: num_matches: %d\n", *num_matches_host);
   cudaMemset(num_matches, 0, sizeof(int));
 
   iterate_all<<<32, 64>>>(device_view, keys_to_find.begin(), N, num_matches);
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
+  // Should be 100000, since we also increment if value is -1
   printf("iterate_all: num_matches: %d\n", *num_matches_host);
   cudaMemset(num_matches, 0, sizeof(int));
 
@@ -258,15 +286,18 @@ int main(void) {
   count<<<32, 64>>>(device_view, keys_to_find.begin(), N, num_matches);
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
+  // Should be 50000
   printf("count: num_matches: %d\n", *num_matches_host);
   cudaMemset(num_matches, 0, sizeof(int));
 
   count_official<<<32, 64>>>(device_view, keys_to_find.begin(), N, num_matches);
   cudaMemcpy(num_matches_host, num_matches, sizeof(int),
              cudaMemcpyDeviceToHost);
+  // Should be 50000
   printf("count official: num_matches: %d\n", *num_matches_host);
 
   auto count = map.count(keys_to_find.begin(), keys_to_find.end());
+  // Should be 50000
   printf("count: %ld\n", count);
   return 0;
 }
