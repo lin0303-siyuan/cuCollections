@@ -591,8 +591,8 @@ class static_multimap {
    * @return Boolean indicating if vector-load is used.
    */
   static constexpr bool uses_vector_load() noexcept {
-    return cuco::detail::is_packable<value_type>();
-    // return false;
+    // return cuco::detail::is_packable<value_type>();
+    return false;
   }
 
   /**

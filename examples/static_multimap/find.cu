@@ -63,33 +63,6 @@ __global__ void find_vector_load(MapViewT multi_map, InputIt first, int n,
         }
       }
 
-      // auto no_const_it = const_cast<iterator>(it);
-      // auto second_no_const_it = const_cast<iterator>(it + 1);
-
-      // auto const first_slot_is_empty = cuco::detail::bitwise_compare(
-      //     no_const_it->first, multi_map.get_empty_key_sentinel());
-      // auto const second_slot_is_empty = cuco::detail::bitwise_compare(
-      //     second_no_const_it->first, multi_map.get_empty_key_sentinel());
-
-      // auto const first_slot_is_empty = cuco::detail::bitwise_compare(
-      //     arr[0].first, multi_map.get_empty_key_sentinel());
-      // auto const second_slot_is_empty = cuco::detail::bitwise_compare(
-      //     arr[1].first, multi_map.get_empty_key_sentinel());
-
-      // auto const first_equals =
-      //     cuco::detail::bitwise_compare(arr[0].first, key);
-      // auto const second_equals =
-      //     cuco::detail::bitwise_compare(arr[1].first, key);
-      // atomicAdd(num_matches, first_equals);
-      // atomicAdd(num_matches, second_equals);
-
-      // if (first_equals) {
-      //   no_const_it->second.store(-1);
-      // }
-      // if (second_equals) {
-      //   second_no_const_it->second.store(-1);
-      // }
-
       if (tile.any(slot_is_empty[0] || slot_is_empty[1])) {
         break;
       }
@@ -259,7 +232,7 @@ int main(void) {
   cudaMalloc(&num_matches, sizeof(int));
   cudaMemset(num_matches, 0, sizeof(int));
   auto device_view = map.get_device_view();
-  find_vector_load<<<grid_size, block_size>>>(device_view, keys_to_find.begin(),
+  find_scalar_load<<<grid_size, block_size>>>(device_view, keys_to_find.begin(),
                                               N, num_matches);
   // find<<<32, 32>>>(device_view, pairs.data().get(), N, num_matches);
 
