@@ -158,6 +158,37 @@ class bloom_filter {
               Hash2 hash2         = Hash2{1},
               Hash3 hash3         = Hash3{2});
 
+
+  /**
+   * @brief Inserts all keys in the range `[first, last)` if it fulfills the predicate.
+   *
+   * @tparam InputIt Device accessible input iterator whose `value_type` is
+   * convertible to the filter's `key_type`
+   * @tparam Hash1 Unary callable type
+   * @tparam Hash2 Unary callable type
+   * @tparam Hash3 Unary callable type
+   * @tparam KeyEqual Binary callable type
+   * @param first Beginning of the sequence of keys
+   * @param last End of the sequence of keys
+   * @param pred Predicate to filter the keys
+   * @param stream The CUDA stream this operation is executed in
+   * @param hash1 First hash function; used to determine a filter slot
+   * @param hash2 Second hash function; used to generate a signature of the key
+   * @param hash3 Third hash function; used to generate a signature of the key
+   */
+  template <typename InputIt,
+            typename Predicate,
+            typename Hash1 = cuco::detail::MurmurHash3_32<key_type>,
+            typename Hash2 = Hash1,
+            typename Hash3 = Hash2>
+  void insert_if(InputIt first,
+              InputIt last,
+              Predicate pred,
+              cudaStream_t stream = 0,
+              Hash1 hash1         = Hash1{},
+              Hash2 hash2         = Hash2{1},
+              Hash3 hash3         = Hash3{2});
+
   /**
    * @brief Indicates whether the keys in the range `[first, last)` are
    * contained in the filter.
@@ -484,6 +515,32 @@ class bloom_filter {
                            Hash1 hash1 = Hash1{},
                            Hash2 hash2 = Hash2{1},
                            Hash3 hash3 = Hash3{2}) noexcept;
+    
+    /**
+     * @brief Inserts the specified key into the filter.
+     *
+     * Returns a `bool` denoting whether the key's signature was not already
+     * present in the slot.
+     *
+     * @tparam Hash1 Unary callable type
+     * @tparam Hash2 Unary callable type
+     * @tparam Hash3 Unary callable type
+     * @param key The key to insert
+     * @param hash1 First hash function; used to determine a filter slot
+     * @param hash2 Second hash function; used to generate a signature of the key
+     * @param hash3 Third hash function; used to generate a signature of the key
+     * @return `true` if the pattern was not already in the filter,
+     * `false` otherwise.
+     */
+    template <typename Hash1 = cuco::detail::MurmurHash3_32<key_type>,
+              typename Predicate,
+              typename Hash2 = Hash1,
+              typename Hash3 = Hash2>
+    __device__ bool insert_if(key_type const& key,
+                              Predicate pred,
+                              Hash1 hash1 = Hash1{},
+                              Hash2 hash2 = Hash2{1},
+                              Hash3 hash3 = Hash3{2}) noexcept;
   };  // class device mutable view
 
   /**

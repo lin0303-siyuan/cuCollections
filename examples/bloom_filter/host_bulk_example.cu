@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 
-#include <cuco/bloom_filter.cuh>
-
 #include <thrust/count.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/sequence.h>
 
+#include <cuco/bloom_filter.cuh>
+#include <cuda/functional>
 #include <iostream>
 
-int main(void)
-{
+void insert_tests() {
   // Generate 10'000 keys and insert the first 5'000 into the filter.
   int const num_keys = 10'000;
-  int const num_tp   = num_keys * 0.5;
-  int const num_tn   = num_keys - num_tp;
+  int const num_tp = num_keys * 0.5;
+  int const num_tn = num_keys - num_tp;
 
   // Spawn a filter with 1'000'000 bits and 6-bit patterns for each key.
   cuco::bloom_filter<int> filter{num_tp * 10, 6};
@@ -37,9 +38,9 @@ int main(void)
   thrust::sequence(keys.begin(), keys.end(), 1);
 
   auto tp_begin = keys.begin();
-  auto tp_end   = tp_begin + num_tp;
+  auto tp_end = tp_begin + num_tp;
   auto tn_begin = tp_end;
-  auto tn_end   = keys.end();
+  auto tn_end = keys.end();
 
   // Insert the first half of the keys.
   filter.insert(tp_begin, tp_end);
@@ -57,12 +58,66 @@ int main(void)
   // the filter and the number of hashes used per key.
   filter.contains(tn_begin, tn_end, tn_result.begin());
 
-  float tp_rate =
-    float(thrust::count(thrust::device, tp_result.begin(), tp_result.end(), true)) / float(num_tp);
-  float fp_rate =
-    float(thrust::count(thrust::device, tn_result.begin(), tn_result.end(), true)) / float(num_tn);
+  float tp_rate = float(thrust::count(thrust::device, tp_result.begin(),
+                                      tp_result.end(), true)) /
+                  float(num_tp);
+  float fp_rate = float(thrust::count(thrust::device, tn_result.begin(),
+                                      tn_result.end(), true)) /
+                  float(num_tn);
 
   std::cout << "TPR=" << tp_rate << " FPR=" << fp_rate << std::endl;
+}
 
+void insert_if_tests() {
+  // Generate 10'000 keys and insert the first 2'500 into the
+  // filter.
+  int const num_keys = 10'000;
+  int const num_tp = num_keys * 0.5;
+  int const num_tn = num_keys - num_tp;
+
+  // Spawn a filter with 1'000'000 bits and 6-bit patterns for each key.
+  cuco::bloom_filter<int> filter{num_tp * 10, 6};
+
+  thrust::device_vector<int> keys(num_keys);
+  thrust::sequence(keys.begin(), keys.end(), 1);
+
+  auto tp_begin = keys.begin();
+  auto tp_end = tp_begin + num_tp / 2;
+  auto tn_begin = tp_end;
+  auto tn_end = keys.end();
+
+  // Insert the first half of the keys.
+  filter.insert_if(tp_begin, tp_end,
+                   cuda::proclaim_return_type<bool>(
+                       [] __device__(auto const& row) { return row <= 2500; }));
+
+  thrust::device_vector<bool> tp_result(num_tp, false);
+  thrust::device_vector<bool> tn_result(num_keys - num_tp, false);
+
+  // Query the filter for the previously inserted keys.
+  // This should result in a true-positive rate of TPR=1.
+  filter.contains(tp_begin, tp_end, tp_result.begin());
+
+  // Query the filter for the keys that are not present in the filter.
+  // Since bloom filters are probalistic data structures, the filter
+  // exhibits a false-positive rate FPR>0 depending on the number of bits in
+  // the filter and the number of hashes used per key.
+  filter.contains(tn_begin, tn_end, tn_result.begin());
+
+  float tp_rate = float(thrust::count(thrust::device, tp_result.begin(),
+                                      tp_result.end(), true)) /
+                  float(num_tp / 2);
+  float fp_rate = float(thrust::count(thrust::device, tn_result.begin(),
+                                      tn_result.end(), true)) /
+                  float(num_tn);
+
+  std::cout << "TPR=" << tp_rate << " FPR=" << fp_rate << std::endl;
+}
+
+int main(void) {
+  std::cout << "Insert tests" << std::endl;
+  insert_tests();
+  std::cout << "Insert if tests" << std::endl;
+  insert_if_tests();
   return 0;
 }

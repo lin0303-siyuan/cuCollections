@@ -74,6 +74,44 @@ __global__ void __launch_bounds__(block_size)
 }
 
 /**
+ * @brief Inserts all keys in the range `[first, last)` that fulfills the predicate.
+ *
+ * @tparam block_size The size of the thread block
+ * @tparam InputIt Device accessible input iterator whose `value_type` is
+ * convertible to the filter's `key_type`
+ * @tparam View Type of device view allowing access of filter storage
+ * @tparam Hash Unary callable type
+ * @param first Beginning of the sequence of keys
+ * @param last End of the sequence of keys
+ * @param pred Predicate that returns `true` if the key should be inserted
+ * @param view Mutable device view used to access the filter's slot storage
+ * @param hash1 First hash function; used to determine a filter slot
+ * @param hash2 Second hash function; used to generate a signature of the key
+ * @param hash3 Third hash function; used to generate a signature of the key
+ */
+template <std::size_t block_size,
+          typename InputIt,
+          typename View,
+          typename Predicate,
+          typename Hash1,
+          typename Hash2,
+          typename Hash3>
+__global__ void __launch_bounds__(block_size)
+  insert_if(InputIt first, InputIt last, View view, Predicate pred, Hash1 hash1, Hash2 hash2, Hash3 hash3)
+{
+  std::size_t tid = block_size * blockIdx.x + threadIdx.x;
+  auto it         = first + tid;
+
+  while (it < last) {
+    if (pred(*it)) {
+      typename View::key_type const key{*it};
+      view.insert(key, hash1, hash2, hash3);
+    }
+    it += gridDim.x * block_size;
+  }
+}
+
+/**
  * @brief Indicates whether the keys in the range `[first, last)` are contained
  * in the filter.
  *
