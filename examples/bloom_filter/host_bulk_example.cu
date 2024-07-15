@@ -87,7 +87,7 @@ void insert_if_tests() {
   auto tn_end = keys.end();
 
   // Insert the first half of the keys.
-  filter.insert_if(tp_begin, tp_end,
+  filter.insert_if(tp_begin, tp_end, tp_begin,
                    cuda::proclaim_return_type<bool>(
                        [] __device__(auto const& row) { return row <= 2500; }));
 

@@ -92,18 +92,19 @@ __global__ void __launch_bounds__(block_size)
 template <std::size_t block_size,
           typename InputIt,
           typename View,
+          typename StencilIt,
           typename Predicate,
           typename Hash1,
           typename Hash2,
           typename Hash3>
 __global__ void __launch_bounds__(block_size)
-  insert_if(InputIt first, InputIt last, View view, Predicate pred, Hash1 hash1, Hash2 hash2, Hash3 hash3)
+  insert_if(InputIt first, InputIt last, View view, StencilIt stencil, Predicate pred, Hash1 hash1, Hash2 hash2, Hash3 hash3)
 {
   std::size_t tid = block_size * blockIdx.x + threadIdx.x;
   auto it         = first + tid;
 
   while (it < last) {
-    if (pred(*it)) {
+    if (pred(*(stencil + (it - first)))) {
       typename View::key_type const key{*it};
       view.insert(key, hash1, hash2, hash3);
     }

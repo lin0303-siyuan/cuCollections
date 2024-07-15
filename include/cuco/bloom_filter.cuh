@@ -177,17 +177,19 @@ class bloom_filter {
    * @param hash3 Third hash function; used to generate a signature of the key
    */
   template <typename InputIt,
+            typename StencilIt,
             typename Predicate,
             typename Hash1 = cuco::detail::MurmurHash3_32<key_type>,
             typename Hash2 = Hash1,
             typename Hash3 = Hash2>
   void insert_if(InputIt first,
-              InputIt last,
-              Predicate pred,
-              cudaStream_t stream = 0,
-              Hash1 hash1         = Hash1{},
-              Hash2 hash2         = Hash2{1},
-              Hash3 hash3         = Hash3{2});
+                 InputIt last,
+                 StencilIt stencil,
+                 Predicate pred,
+                 cudaStream_t stream = 0,
+                 Hash1 hash1         = Hash1{},
+                 Hash2 hash2         = Hash2{1},
+                 Hash3 hash3         = Hash3{2});
 
   /**
    * @brief Indicates whether the keys in the range `[first, last)` are
@@ -537,6 +539,7 @@ class bloom_filter {
               typename Hash2 = Hash1,
               typename Hash3 = Hash2>
     __device__ bool insert_if(key_type const& key,
+
                               Predicate pred,
                               Hash1 hash1 = Hash1{},
                               Hash2 hash2 = Hash2{1},

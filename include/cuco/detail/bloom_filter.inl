@@ -85,13 +85,14 @@ void bloom_filter<Key, Scope, Allocator, Slot>::insert(InputIt first,
 
 template <typename Key, cuda::thread_scope Scope, typename Allocator,
           typename Slot>
-template <typename InputIt, typename Predicate, typename Hash1, typename Hash2, typename Hash3>
+template <typename InputIt, typename StencilIt, typename Predicate, typename Hash1, typename Hash2, typename Hash3>
 void bloom_filter<Key, Scope, Allocator, Slot>::insert_if(InputIt first,
-                                                       InputIt last,
-                                                       Predicate pred,
-                                                       cudaStream_t stream,
-                                                       Hash1 hash1, Hash2 hash2,
-                                                       Hash3 hash3) {
+                                                          InputIt last,
+                                                          StencilIt stencil,
+                                                          Predicate pred,
+                                                          cudaStream_t stream,
+                                                          Hash1 hash1, Hash2 hash2,
+                                                          Hash3 hash3) {
   auto num_keys = std::distance(first, last);
   if (num_keys == 0) {
     return;
@@ -101,7 +102,7 @@ void bloom_filter<Key, Scope, Allocator, Slot>::insert_if(InputIt first,
   std::size_t constexpr stride = 4;
   std::size_t const grid_size = SDIV(num_keys, stride * block_size);
   detail::insert_if<block_size><<<grid_size, block_size, 0, stream>>>(
-      first, last, get_device_mutable_view(), pred, hash1, hash2, hash3);
+      first, last, get_device_mutable_view(), stencil, pred, hash1, hash2, hash3);
 }
 
 template <typename Key, cuda::thread_scope Scope, typename Allocator,
