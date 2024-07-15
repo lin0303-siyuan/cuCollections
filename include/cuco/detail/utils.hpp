@@ -24,6 +24,17 @@
 namespace cuco {
 namespace detail {
 
+template <typename T>
+static constexpr std::size_t type_bits() noexcept
+{
+  return sizeof(T) * CHAR_BIT;
+}
+
+// safe division
+#ifndef SDIV
+#define SDIV(x, y) (((x) + (y)-1) / (y))
+#endif
+
 template <typename Iterator>
 constexpr inline index_type distance(Iterator begin, Iterator end)
 {
